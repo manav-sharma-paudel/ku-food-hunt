@@ -1,0 +1,286 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [pg_trgm]
+}
+
+// ————————————————————————————————— Enums
+
+enum PriceBand {
+  BUDGET
+  STANDARD
+  PREMIUM
+}
+
+enum RestaurantStatus {
+  DRAFT
+  PENDING
+  PUBLISHED
+  REJECTED
+  ARCHIVED
+}
+
+enum ImageType {
+  COVER
+  GALLERY
+  MENU_SCAN
+}
+
+enum ReviewStatus {
+  PUBLISHED
+  HIDDEN
+  FLAGGED
+}
+
+enum AdminRole {
+  SUPERADMIN
+  EDITOR
+}
+
+// ————————————————————————————————— Core
+
+model Restaurant {
+  id            String           @id @default(uuid())
+  slug          String           @unique
+  name          String
+  description   String
+  address       String
+  latitude      Float
+  longitude     Float
+  googlePlaceId String?
+  phone         String?
+  priceBand     PriceBand
+  priceMinNpr   Int?
+  priceMaxNpr   Int?
+  hasQrPayment  Boolean          @default(false)
+  hasDelivery   Boolean          @default(false)
+  hasVegOptions Boolean          @default(false)
+  status        RestaurantStatus @default(DRAFT)
+  isFeatured    Boolean          @default(false)
+  featuredRank  Int?
+
+  // Partner submission workflow (public onboarding form). The submitter's
+  // contact details are private approval correspondence, never shown publicly.
+  legalName         String?
+  websiteUrl        String?
+  submitterName     String?
+  submitterEmail    String?
+  submitterPhone    String?
+  submittedAt       DateTime?
+  rejectionReason   String?
+  // SHA-256 of the emailed edit-link token; the raw token is never stored.
+  resubmitTokenHash String?   @unique
+
+  // Cached aggregates — updated in the same transaction as review writes.
+  avgRating   Float @default(0)
+  reviewCount Int   @default(0)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  categories     RestaurantCategory[]
+  openingHours   OpeningHour[]
+  images         RestaurantImage[]
+  menuCategories MenuCategory[]
+  menuItems      MenuItem[]
+  reviews        Review[]
+
+  @@index([status])
+  @@index([isFeatured, featuredRank])
+  @@index([name(ops: raw("gin_trgm_ops"))], type: Gin)
+}
+
+model Category {
+  id        String   @id @default(uuid())
+  slug      String   @unique
+  name      String
+  icon      String
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  restaurants RestaurantCategory[]
+}
+
+model RestaurantCategory {
+  restaurantId String
+  categoryId   String
+
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  category   Category   @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@id([restaurantId, categoryId])
+}
+
+// Minutes from midnight, Nepal local time (Asia/Kathmandu). closesAt > 1440
+// means past midnight. Multiple rows per day = split shifts; no rows = closed.
+model OpeningHour {
+  id           String  @id @default(uuid())
+  restaurantId String
+  dayOfWeek    Int // 0 = Sunday … 6 = Saturday
+  opensAt      Int
+  closesAt     Int
+  note         String?
+
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+
+  @@index([restaurantId])
+}
+
+model RestaurantImage {
+  id                 String    @id @default(uuid())
+  restaurantId       String
+  url                String
+  cloudinaryPublicId String?
+  alt                String
+  type               ImageType @default(GALLERY)
+  sortOrder          Int       @default(0)
+  width              Int?
+  height             Int?
+  createdAt          DateTime  @default(now())
+
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+
+  @@index([restaurantId, type])
+}
+
+// ————————————————————————————————— Menu
+
+model MenuCategory {
+  id           String   @id @default(uuid())
+  restaurantId String
+  name         String
+  sortOrder    Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  items      MenuItem[]
+
+  @@index([restaurantId])
+}
+
+model MenuItem {
+  id             String   @id @default(uuid())
+  menuCategoryId String
+  restaurantId   String // denormalized so dish search can join straight to the restaurant
+  name           String
+  description    String?
+  priceNpr       Int
+  imageUrl       String?
+  isAvailable    Boolean  @default(true)
+  isPopular      Boolean  @default(false)
+  isVegetarian   Boolean  @default(false)
+  sortOrder      Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  menuCategory MenuCategory @relation(fields: [menuCategoryId], references: [id], onDelete: Cascade)
+  restaurant   Restaurant   @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+
+  @@index([restaurantId])
+  @@index([name(ops: raw("gin_trgm_ops"))], type: Gin)
+}
+
+// ————————————————————————————————— Reviews
+
+model Review {
+  id            String       @id @default(uuid())
+  restaurantId  String
+  authorName    String?
+  rating        Int // 1–5, validated at the API boundary
+  body          String
+  status        ReviewStatus @default(PUBLISHED)
+  helpfulCount  Int          @default(0)
+  ipHash        String? // salted hash — raw IPs are never stored
+  userAgentHash String?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+  deletedAt     DateTime?
+
+  restaurant Restaurant    @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  images     ReviewImage[]
+  votes      ReviewVote[]
+
+  @@index([restaurantId, status, createdAt])
+}
+
+model ReviewImage {
+  id                 String   @id @default(uuid())
+  reviewId           String
+  url                String
+  cloudinaryPublicId String?
+  sortOrder          Int      @default(0)
+  createdAt          DateTime @default(now())
+
+  review Review @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+
+  @@index([reviewId])
+}
+
+model ReviewVote {
+  id        String   @id @default(uuid())
+  reviewId  String
+  voterHash String
+  createdAt DateTime @default(now())
+
+  review Review @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+
+  @@unique([reviewId, voterHash])
+}
+
+// ————————————————————————————————— Admin & editorial
+
+model Admin {
+  id           String    @id @default(uuid())
+  email        String    @unique
+  passwordHash String
+  name         String
+  role         AdminRole @default(EDITOR)
+  lastLoginAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  auditLogs AuditLog[]
+  sessions  AdminSession[]
+}
+
+model AdminSession {
+  id        String   @id @default(uuid())
+  adminId   String
+  tokenHash String   @unique // sha256 of the opaque cookie token — the raw token is never stored
+  csrfToken String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  admin Admin @relation(fields: [adminId], references: [id], onDelete: Cascade)
+
+  @@index([adminId])
+  @@index([expiresAt])
+}
+
+model SiteSetting {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  adminId    String?
+  action     String
+  entityType String
+  entityId   String?
+  diff       Json?
+  createdAt  DateTime @default(now())
+
+  admin Admin? @relation(fields: [adminId], references: [id], onDelete: SetNull)
+
+  @@index([createdAt])
+}

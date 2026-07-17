@@ -1,0 +1,8 @@
+# KU Food Hunt
+User-agent: *
+Allow: /
+
+# Keep crawlers out of the transient search/filter permutations.
+Disallow: /explore?
+
+Sitemap: /sitemap.xml

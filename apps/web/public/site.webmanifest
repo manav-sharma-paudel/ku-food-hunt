@@ -1,0 +1,17 @@
+{
+  "name": "KU Food Hunt",
+  "short_name": "KU Food Hunt",
+  "description": "Every great bite around Kathmandu University — menus, prices, and honest student reviews.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#faf8f5",
+  "theme_color": "#e85d2c",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "type": "image/svg+xml",
+      "sizes": "any",
+      "purpose": "any maskable"
+    }
+  ]
+}

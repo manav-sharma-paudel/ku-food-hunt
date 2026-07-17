@@ -1,0 +1,178 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+
+/* Dark mode is class-driven (.dark on <html>), toggled by the theme provider. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/*
+ * Semantic tokens (blueprint §7). Light values live in :root, dark values in
+ * .dark; @theme inline binds Tailwind color utilities to the live CSS vars so
+ * every `bg-*`, `text-*`, `border-*` flips automatically between themes.
+ */
+:root {
+  --background: #faf8f5;
+  --surface: #ffffff;
+  --surface-2: #f4efe9;
+  --foreground: #221d1a;
+  --muted: #6e655e;
+  --border: #eae4dc;
+  --input: #e3ddd4;
+
+  --primary: #e85d2c;
+  --primary-foreground: #ffffff;
+  /* Deepened to clear WCAG AA (4.5:1) as text on primary/10 tints and as button fill. */
+  --primary-strong: #b8431b;
+
+  --honey: #f2a93b;
+  /* Deepened so the "Open" badge text passes AA on its basil/12 tint. */
+  --basil: #276b41;
+  --basil-foreground: #ffffff;
+  --danger: #c0392b;
+  --danger-foreground: #ffffff;
+
+  --ring: #e85d2c;
+
+  --footer: #211c19;
+  --footer-foreground: #f2eee9;
+  --footer-muted: #a69c93;
+}
+
+.dark {
+  --background: #141210;
+  --surface: #1d1a17;
+  --surface-2: #262019;
+  --foreground: #f2eee9;
+  --muted: #a69c93;
+  --border: #2c2824;
+  --input: #322c27;
+
+  --primary: #f0713f;
+  --primary-foreground: #1a0f09;
+  --primary-strong: #f0713f;
+
+  --honey: #f2b04d;
+  --basil: #4fa871;
+  --basil-foreground: #0d1f14;
+  --danger: #e06052;
+  --danger-foreground: #1f0c0a;
+
+  --ring: #f0713f;
+
+  --footer: #0f0d0b;
+  --footer-foreground: #f2eee9;
+  --footer-muted: #8a8079;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-border: var(--border);
+  --color-input: var(--input);
+
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary-strong: var(--primary-strong);
+
+  --color-honey: var(--honey);
+  --color-basil: var(--basil);
+  --color-basil-foreground: var(--basil-foreground);
+  --color-danger: var(--danger);
+  --color-danger-foreground: var(--danger-foreground);
+
+  --color-ring: var(--ring);
+
+  --color-footer: var(--footer);
+  --color-footer-foreground: var(--footer-foreground);
+  --color-footer-muted: var(--footer-muted);
+
+  --font-sans:
+    'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', 'Noto Sans Devanagari', sans-serif;
+
+  --radius-btn: 0.625rem; /* 10px */
+  --radius-card: 1rem; /* 16px */
+  --radius-sheet: 1.25rem; /* 20px */
+
+  --shadow-soft: 0 1px 2px rgba(28, 20, 12, 0.04), 0 8px 24px rgba(28, 20, 12, 0.06);
+  --shadow-lift: 0 2px 4px rgba(28, 20, 12, 0.05), 0 16px 40px rgba(28, 20, 12, 0.1);
+
+  --animate-fade-in: fade-in 0.2s ease-out;
+  --animate-shimmer: shimmer 1.6s ease-in-out infinite;
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes shimmer {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+
+@layer base {
+  * {
+    border-color: var(--border);
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+    scroll-behavior: smooth;
+  }
+
+  body {
+    background-color: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    letter-spacing: -0.02em;
+  }
+
+  /* Keyboard focus only — visible ring in the brand color. */
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+
+  ::selection {
+    background-color: color-mix(in srgb, var(--primary) 24%, transparent);
+  }
+
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
