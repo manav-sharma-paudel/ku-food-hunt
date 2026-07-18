@@ -75,7 +75,7 @@ by each consumer (Vite / tsx / tsup) — no separate build-watch step needed.
 
 ### Admin console
 
-Sign in at [`/admin`](http://localhost:5173/admin). Dev credentials (seeded): **`admin@kufoodhunt.com`** / **`kufoodhunt-dev`** — override with `ADMIN_SEED_EMAIL` / `ADMIN_SEED_PASSWORD` before `db:seed`.
+Sign in at [`/admin`](http://localhost:5173/admin). Dev credentials (seeded): **`admin@kufoodhunt.app`** / **`kufoodhunt-dev`** — override with `ADMIN_SEED_EMAIL` / `ADMIN_SEED_PASSWORD` before `db:seed`.
 
 ### Partner onboarding
 

@@ -11,6 +11,6 @@ export const SITE_DESCRIPTION =
 export function siteUrl(path = '/'): string {
   const base =
     import.meta.env.VITE_SITE_URL ??
-    (typeof window !== 'undefined' ? window.location.origin : 'https://kufoodhunt.com');
+    (typeof window !== 'undefined' ? window.location.origin : 'https://kufoodhunt.app');
   return new URL(path, base).toString();
 }

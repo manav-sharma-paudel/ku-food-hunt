@@ -955,7 +955,7 @@ async function main() {
   }
 
   console.log('Ensuring admin account…');
-  const adminEmail = process.env.ADMIN_SEED_EMAIL ?? 'admin@kufoodhunt.com';
+  const adminEmail = process.env.ADMIN_SEED_EMAIL ?? 'admin@kufoodhunt.app';
   const adminPassword = process.env.ADMIN_SEED_PASSWORD;
   // The fallback password lives in this public repo — seeding it anywhere but
   // local dev would hand out a working SUPERADMIN login.

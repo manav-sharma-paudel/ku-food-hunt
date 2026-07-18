@@ -19,7 +19,7 @@ const envSchema = z.object({
   RESEND_API_KEY: z.string().optional(),
   MAIL_FROM: z.string().default('KU Food Hunt <onboarding@resend.dev>'),
   // Public origin of the partner onboarding form, used in emailed edit links
-  // (e.g. https://partners.kufoodhunt.com). Defaults to SITE_URL.
+  // (e.g. https://partners.kufoodhunt.app). Defaults to SITE_URL.
   PARTNERS_URL: z.url().optional(),
 });
 

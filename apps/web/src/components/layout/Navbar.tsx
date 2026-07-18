@@ -92,7 +92,7 @@ export function Navbar() {
                   ))}
                 </nav>
                 <a
-                  href="mailto:hello@kufoodhunt.com?subject=Restaurant suggestion"
+                  href="mailto:hello@kufoodhunt.app?subject=Restaurant suggestion"
                   className="mt-auto text-sm text-muted hover:text-foreground"
                 >
                   Suggest a restaurant →
