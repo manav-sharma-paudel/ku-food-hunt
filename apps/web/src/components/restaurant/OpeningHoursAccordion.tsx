@@ -1,4 +1,4 @@
-import { formatMinutes, getNepalClock, type OpeningHourDto } from '@ku-food-hunt/shared';
+import { formatMinutes, getNepalClock, isOpenNow, type OpeningHourDto } from '@ku-food-hunt/shared';
 import { ChevronDown } from 'lucide-react';
 import { useState } from 'react';
 
@@ -16,10 +16,15 @@ function slotsForDay(hours: OpeningHourDto[], day: number): string {
 export function OpeningHoursAccordion({ hours }: { hours: OpeningHourDto[] }) {
   const [expanded, setExpanded] = useState(false);
   const today = getNepalClock().dayOfWeek;
-  const todayHours = hours.filter((h) => h.dayOfWeek === today);
+  const allSlots = hours.map((h) => ({
+    dayOfWeek: h.dayOfWeek,
+    opensAt: h.opensAt,
+    closesAt: h.closesAt,
+  }));
   const status = openStatus(
-    todayHours.map((h) => ({ dayOfWeek: h.dayOfWeek, opensAt: h.opensAt, closesAt: h.closesAt })),
-    false,
+    allSlots.filter((s) => s.dayOfWeek === today),
+    // Authoritative open-now — also catches a slot that runs past midnight from the day before.
+    isOpenNow(allSlots),
   );
 
   return (
