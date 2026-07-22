@@ -5,6 +5,7 @@ import {
   type AdminRestaurantDto,
   type AdminRestaurantListItemDto,
   type AdminRestaurantListQuery,
+  type AdminRoleValue,
   type HoursUpsertInput,
   type ImageCreateInput,
   type ImageUpdateInput,
@@ -102,6 +103,22 @@ async function ensureExists(id: string): Promise<void> {
   if (!row) throw new HttpError(404, 'NOT_FOUND', 'Restaurant not found');
 }
 
+/**
+ * Publishing — making a restaurant live on the public site — is limited to
+ * SUPERADMIN. Moderators (EDITOR) can create and edit drafts and moderate
+ * content, but cannot flip a listing to PUBLISHED (nor approve a submission,
+ * which publishes it — that route is gated separately with requireRole).
+ */
+function assertMayPublish(role: AdminRoleValue): void {
+  if (role !== 'SUPERADMIN') {
+    throw new HttpError(
+      403,
+      'FORBIDDEN',
+      'Only an administrator can publish a restaurant. Save it as a draft for an admin to review.',
+    );
+  }
+}
+
 export async function ensureUniqueSlug(base: string, excludeId?: string): Promise<string> {
   const root = slugify(base) || 'restaurant';
   let candidate = root;
@@ -179,7 +196,9 @@ export async function listAdminRestaurants(
 export async function createRestaurant(
   input: RestaurantCreateInput,
   adminId: string,
+  actorRole: AdminRoleValue,
 ): Promise<AdminRestaurantDto> {
+  if (input.status === 'PUBLISHED') assertMayPublish(actorRole);
   const slug = await ensureUniqueSlug(input.slug ?? input.name);
   const categoryIds = await resolveCategoryIds(input.categorySlugs);
 
@@ -222,8 +241,16 @@ export async function updateRestaurant(
   id: string,
   input: RestaurantUpdateInput,
   adminId: string,
+  actorRole: AdminRoleValue,
 ): Promise<AdminRestaurantDto> {
-  await ensureExists(id);
+  const current = await prisma.restaurant.findFirst({
+    where: { id, deletedAt: null },
+    select: { status: true },
+  });
+  if (!current) throw new HttpError(404, 'NOT_FOUND', 'Restaurant not found');
+  // Only guard the transition INTO published — editing an already-live listing
+  // (status stays PUBLISHED) is normal moderation work and stays allowed.
+  if (input.status === 'PUBLISHED' && current.status !== 'PUBLISHED') assertMayPublish(actorRole);
 
   const data: Prisma.RestaurantUpdateInput = {};
   if (input.name !== undefined) data.name = input.name;

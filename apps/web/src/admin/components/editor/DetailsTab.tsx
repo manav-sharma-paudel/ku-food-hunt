@@ -13,6 +13,7 @@ import { useNavigate } from 'react-router';
 
 import { useCategories } from '../../../api/queries';
 import { cn } from '../../../lib/cn';
+import { useAdminAuth } from '../../AdminAuthContext';
 import { useSaveRestaurant } from '../../pages/AdminRestaurantEditor';
 import { adminEndpoints } from '../../api/adminEndpoints';
 import { adminInput, adminLabel } from '../adminStyles';
@@ -24,6 +25,11 @@ export function DetailsTab({ restaurant }: { restaurant: AdminRestaurantDto }) {
   const { data: categories } = useCategories();
   const onSaved = useSaveRestaurant(restaurant.id);
   const navigate = useNavigate();
+  const { admin } = useAdminAuth();
+  const isSuperadmin = admin?.role === 'SUPERADMIN';
+  // Moderators can prep drafts but not publish, and can't archive (delete) — both
+  // are SUPERADMIN-only server-side, so hide/disable those controls for them.
+  const alreadyPublished = restaurant.status === 'PUBLISHED';
 
   const [form, setForm] = useState({
     name: restaurant.name,
@@ -153,11 +159,20 @@ export function DetailsTab({ restaurant }: { restaurant: AdminRestaurantDto }) {
             className={adminInput}
           >
             {RESTAURANT_STATUSES.map((s) => (
-              <option key={s} value={s}>
+              <option
+                key={s}
+                value={s}
+                disabled={s === 'PUBLISHED' && !isSuperadmin && !alreadyPublished}
+              >
                 {s.charAt(0) + s.slice(1).toLowerCase()}
               </option>
             ))}
           </select>
+          {!isSuperadmin && !alreadyPublished && (
+            <span className="mt-1 block text-xs text-muted">
+              Only an administrator can set a restaurant to Published.
+            </span>
+          )}
         </Field>
       </div>
 
@@ -213,24 +228,26 @@ export function DetailsTab({ restaurant }: { restaurant: AdminRestaurantDto }) {
         />
       </div>
 
-      <div className="mt-6 rounded-card border border-danger/30 bg-danger/5 p-4">
-        <p className="text-sm font-medium">Archive restaurant</p>
-        <p className="mt-0.5 text-xs text-muted">
-          Removes it from the public site. This is a soft delete and can be restored in the
-          database.
-        </p>
-        <button
-          onClick={() => {
-            if (confirm(`Archive “${restaurant.name}”? It will disappear from the public site.`))
-              archive.mutate();
-          }}
-          disabled={archive.isPending}
-          className="mt-3 inline-flex items-center gap-1.5 rounded-btn border border-danger/40 px-3 py-1.5 text-sm font-medium text-danger hover:bg-danger/10 disabled:opacity-50"
-        >
-          <Trash2 className="size-4" />
-          Archive
-        </button>
-      </div>
+      {isSuperadmin && (
+        <div className="mt-6 rounded-card border border-danger/30 bg-danger/5 p-4">
+          <p className="text-sm font-medium">Archive restaurant</p>
+          <p className="mt-0.5 text-xs text-muted">
+            Removes it from the public site. This is a soft delete and can be restored in the
+            database.
+          </p>
+          <button
+            onClick={() => {
+              if (confirm(`Archive “${restaurant.name}”? It will disappear from the public site.`))
+                archive.mutate();
+            }}
+            disabled={archive.isPending}
+            className="mt-3 inline-flex items-center gap-1.5 rounded-btn border border-danger/40 px-3 py-1.5 text-sm font-medium text-danger hover:bg-danger/10 disabled:opacity-50"
+          >
+            <Trash2 className="size-4" />
+            Archive
+          </button>
+        </div>
+      )}
     </div>
   );
 }

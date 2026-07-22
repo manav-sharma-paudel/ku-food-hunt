@@ -24,7 +24,7 @@ adminRestaurantsRouter.get('/', async (req, res) => {
 
 adminRestaurantsRouter.post('/', async (req, res) => {
   const input = parseBody(restaurantCreateSchema, req);
-  res.status(201).json({ data: await svc.createRestaurant(input, req.admin!.id) });
+  res.status(201).json({ data: await svc.createRestaurant(input, req.admin!.id, req.admin!.role) });
 });
 
 adminRestaurantsRouter.get('/:id', async (req, res) => {
@@ -33,11 +33,19 @@ adminRestaurantsRouter.get('/:id', async (req, res) => {
 
 adminRestaurantsRouter.patch('/:id', async (req, res) => {
   const input = parseBody(restaurantUpdateSchema, req);
-  res.json({ data: await svc.updateRestaurant(requireParam(req, 'id'), input, req.admin!.id) });
+  res.json({
+    data: await svc.updateRestaurant(
+      requireParam(req, 'id'),
+      input,
+      req.admin!.id,
+      req.admin!.role,
+    ),
+  });
 });
 
-// Partner-submission decisions. Same gate as all restaurant management.
-adminRestaurantsRouter.post('/:id/approve', async (req, res) => {
+// Approving a submission publishes it, so it is SUPERADMIN-only (moderators can
+// still reject). Rejecting stays open to any admin.
+adminRestaurantsRouter.post('/:id/approve', requireRole('SUPERADMIN'), async (req, res) => {
   res.json({ data: await svc.approveSubmission(requireParam(req, 'id'), req.admin!.id) });
 });
 

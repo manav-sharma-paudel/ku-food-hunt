@@ -11,6 +11,7 @@ import {
   DialogTitle,
 } from '../../../components/ui/dialog';
 import { formatRelativeDate } from '../../../lib/date';
+import { useAdminAuth } from '../../AdminAuthContext';
 import { adminEndpoints } from '../../api/adminEndpoints';
 import { useSaveRestaurant } from '../../pages/AdminRestaurantEditor';
 
@@ -20,6 +21,8 @@ import { useSaveRestaurant } from '../../pages/AdminRestaurantEditor';
  */
 export function SubmissionBanner({ restaurant }: { restaurant: AdminRestaurantDto }) {
   const onSaved = useSaveRestaurant(restaurant.id);
+  const { admin } = useAdminAuth();
+  const canPublish = admin?.role === 'SUPERADMIN';
   const [rejectOpen, setRejectOpen] = useState(false);
 
   const approve = useMutation({
@@ -87,26 +90,35 @@ export function SubmissionBanner({ restaurant }: { restaurant: AdminRestaurantDt
         </div>
 
         {pending && (
-          <div className="flex shrink-0 gap-2">
-            <Button
-              size="sm"
-              onClick={() => {
-                if (confirm(`Approve and publish “${restaurant.name}”?`)) approve.mutate();
-              }}
-              disabled={approve.isPending}
-            >
-              {approve.isPending ? <Loader2 className="animate-spin" /> : <CheckCircle2 />}
-              Approve & publish
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              className="border-danger/40 text-danger hover:bg-danger/10"
-              onClick={() => setRejectOpen(true)}
-            >
-              <XCircle />
-              Reject
-            </Button>
+          <div className="flex shrink-0 flex-col items-end gap-1">
+            <div className="flex gap-2">
+              {canPublish && (
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    if (confirm(`Approve and publish “${restaurant.name}”?`)) approve.mutate();
+                  }}
+                  disabled={approve.isPending}
+                >
+                  {approve.isPending ? <Loader2 className="animate-spin" /> : <CheckCircle2 />}
+                  Approve & publish
+                </Button>
+              )}
+              <Button
+                size="sm"
+                variant="outline"
+                className="border-danger/40 text-danger hover:bg-danger/10"
+                onClick={() => setRejectOpen(true)}
+              >
+                <XCircle />
+                Reject
+              </Button>
+            </div>
+            {!canPublish && (
+              <span className="text-xs text-muted">
+                Only an administrator can approve &amp; publish.
+              </span>
+            )}
           </div>
         )}
       </div>
