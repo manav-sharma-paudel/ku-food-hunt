@@ -72,4 +72,29 @@ describe('partnerSubmissionSchema', () => {
       false,
     );
   });
+  it('rejects an opening slot whose closing time is not after its opening time', () => {
+    // 18:00 → 02:00 must be written as closesAt 1560, not 120. The backwards
+    // form used to pass validation and then read as "closed" at every instant.
+    expect(
+      partnerSubmissionSchema.safeParse({
+        ...valid,
+        hours: [{ dayOfWeek: 1, opensAt: 1080, closesAt: 120 }],
+      }).success,
+    ).toBe(false);
+    expect(
+      partnerSubmissionSchema.safeParse({
+        ...valid,
+        hours: [{ dayOfWeek: 1, opensAt: 1080, closesAt: 1560 }],
+      }).success,
+    ).toBe(true);
+  });
+
+  it('rejects a zero-length opening slot', () => {
+    expect(
+      partnerSubmissionSchema.safeParse({
+        ...valid,
+        hours: [{ dayOfWeek: 1, opensAt: 600, closesAt: 600 }],
+      }).success,
+    ).toBe(false);
+  });
 });

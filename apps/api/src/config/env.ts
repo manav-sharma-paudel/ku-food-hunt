@@ -9,6 +9,22 @@ const envSchema = z.object({
   // Public origin used for absolute URLs in the sitemap. Set to the real domain in prod.
   SITE_URL: z.url().default('http://localhost:5173'),
   DATABASE_URL: z.string().min(1, 'DATABASE_URL is required'),
+  /**
+   * How many reverse proxies sit in front of this app. Express walks back this
+   * many hops through X-Forwarded-For to resolve `req.ip`, which every rate
+   * limiter and the salted IP hash on reviews depend on — so a wrong value is
+   * not cosmetic:
+   *
+   *   too low  → req.ip is the CDN's edge address, identical for every visitor,
+   *              so all rate limits collapse into one shared global bucket
+   *   too high → req.ip is read straight from a client-supplied header, so every
+   *              rate limit is bypassed by forging X-Forwarded-For
+   *
+   * 0 = the app is exposed directly (X-Forwarded-For is ignored entirely).
+   * 1 = exactly one proxy, e.g. the nginx container in docker-compose.yml.
+   * 2 = a CDN in front of a platform router, e.g. Cloudflare → Railway.
+   */
+  TRUST_PROXY: z.coerce.number().int().min(0).max(10).default(0),
   // Salts the one-way IP/User-Agent hashes attached to reviews and helpful votes;
   // raw IPs are never stored. Override with a long random value in production.
   REVIEW_HASH_SALT: z.string().min(1).default('kfh-dev-salt-change-me'),

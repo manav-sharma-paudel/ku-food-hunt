@@ -1,6 +1,8 @@
 import {
   canApproveSubmission,
   canRejectSubmission,
+  canSetRestaurantStatus,
+  restaurantStatusDeniedReason,
   slugify,
   type AdminRestaurantDto,
   type AdminRestaurantListItemDto,
@@ -11,6 +13,7 @@ import {
   type ImageUpdateInput,
   type MenuUpsertInput,
   type RestaurantCreateInput,
+  type RestaurantStatusValue,
   type RestaurantUpdateInput,
 } from '@ku-food-hunt/shared';
 import { randomBytes } from 'node:crypto';
@@ -104,18 +107,21 @@ async function ensureExists(id: string): Promise<void> {
 }
 
 /**
- * Publishing — making a restaurant live on the public site — is limited to
- * SUPERADMIN. Moderators (EDITOR) can create and edit drafts and moderate
- * content, but cannot flip a listing to PUBLISHED (nor approve a submission,
- * which publishes it — that route is gated separately with requireRole).
+ * Role gate for every status transition, in both directions: an EDITOR can move
+ * a listing between DRAFT/PENDING/REJECTED, but publishing, archiving, and
+ * unpublishing a live listing are all SUPERADMIN-only. (Approving a submission
+ * publishes it, so that route is gated separately with requireRole.)
+ *
+ * The rule itself lives in the shared package so the admin UI greys out exactly
+ * the options this would reject — see canSetRestaurantStatus.
  */
-function assertMayPublish(role: AdminRoleValue): void {
-  if (role !== 'SUPERADMIN') {
-    throw new HttpError(
-      403,
-      'FORBIDDEN',
-      'Only an administrator can publish a restaurant. Save it as a draft for an admin to review.',
-    );
+function assertMaySetStatus(
+  role: AdminRoleValue,
+  next: RestaurantStatusValue,
+  current?: RestaurantStatusValue,
+): void {
+  if (!canSetRestaurantStatus(role, next, current)) {
+    throw new HttpError(403, 'FORBIDDEN', restaurantStatusDeniedReason(next, current));
   }
 }
 
@@ -198,7 +204,7 @@ export async function createRestaurant(
   adminId: string,
   actorRole: AdminRoleValue,
 ): Promise<AdminRestaurantDto> {
-  if (input.status === 'PUBLISHED') assertMayPublish(actorRole);
+  assertMaySetStatus(actorRole, input.status);
   const slug = await ensureUniqueSlug(input.slug ?? input.name);
   const categoryIds = await resolveCategoryIds(input.categorySlugs);
 
@@ -248,9 +254,9 @@ export async function updateRestaurant(
     select: { status: true },
   });
   if (!current) throw new HttpError(404, 'NOT_FOUND', 'Restaurant not found');
-  // Only guard the transition INTO published — editing an already-live listing
-  // (status stays PUBLISHED) is normal moderation work and stays allowed.
-  if (input.status === 'PUBLISHED' && current.status !== 'PUBLISHED') assertMayPublish(actorRole);
+  // Editing an already-live listing without touching its status is normal
+  // moderation work; changing the status is role-gated in both directions.
+  if (input.status !== undefined) assertMaySetStatus(actorRole, input.status, current.status);
 
   const data: Prisma.RestaurantUpdateInput = {};
   if (input.name !== undefined) data.name = input.name;

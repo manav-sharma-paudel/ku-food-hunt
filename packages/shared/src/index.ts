@@ -7,6 +7,7 @@ export * from './schemas/review';
 export * from './types/admin';
 export * from './types/partner';
 export * from './types/restaurant';
+export * from './utils/admin-permissions';
 export * from './utils/format';
 export * from './utils/geo';
 export * from './utils/maps';

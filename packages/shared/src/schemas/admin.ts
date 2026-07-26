@@ -77,16 +77,31 @@ export type RestaurantUpdateInput = z.infer<typeof restaurantUpdateSchema>;
 
 // ————————————————————————————————— Opening hours (replace-all)
 
+/**
+ * A closing time must come after the opening time on the same clock. Past-midnight
+ * closings are encoded by carrying past 1440 (18:00–02:00 is 1080 → 1560), so
+ * writing that 02:00 as `120` is the natural mistake — and it produces a slot that
+ * `isOpenAt()` can never satisfy, silently marking the restaurant closed at every
+ * instant, in the filters, on the map, and in the JSON-LD served to search engines.
+ */
+export const openingHourSlotError =
+  'Closing time must be after opening time (past midnight: add 1440 — 2 AM is 1560)';
+
 export const hoursUpsertSchema = z.object({
   hours: z
     .array(
-      z.object({
-        dayOfWeek: z.number().int().min(0).max(6),
-        opensAt: z.number().int().min(0).max(1440),
-        // closesAt may exceed 1440 to model past-midnight closings.
-        closesAt: z.number().int().min(1).max(2880),
-        note: nullableText(80),
-      }),
+      z
+        .object({
+          dayOfWeek: z.number().int().min(0).max(6),
+          opensAt: z.number().int().min(0).max(1440),
+          // closesAt may exceed 1440 to model past-midnight closings.
+          closesAt: z.number().int().min(1).max(2880),
+          note: nullableText(80),
+        })
+        .refine((h) => h.closesAt > h.opensAt, {
+          message: openingHourSlotError,
+          path: ['closesAt'],
+        }),
     )
     .max(40),
 });

@@ -1,4 +1,5 @@
 import {
+  canSetRestaurantStatus,
   PRICE_BANDS,
   PRICE_BAND_LABELS,
   RESTAURANT_STATUSES,
@@ -162,15 +163,17 @@ export function DetailsTab({ restaurant }: { restaurant: AdminRestaurantDto }) {
               <option
                 key={s}
                 value={s}
-                disabled={s === 'PUBLISHED' && !isSuperadmin && !alreadyPublished}
+                disabled={!admin || !canSetRestaurantStatus(admin.role, s, restaurant.status)}
               >
                 {s.charAt(0) + s.slice(1).toLowerCase()}
               </option>
             ))}
           </select>
-          {!isSuperadmin && !alreadyPublished && (
+          {!isSuperadmin && (
             <span className="mt-1 block text-xs text-muted">
-              Only an administrator can set a restaurant to Published.
+              {alreadyPublished
+                ? 'Only an administrator can publish or unpublish a live restaurant.'
+                : 'Only an administrator can set a restaurant to Published or Archived.'}
             </span>
           )}
         </Field>

@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 import { PRICE_BANDS } from '../constants';
-import { RESTAURANT_PHOTO_PATH } from './admin';
+import { openingHourSlotError, RESTAURANT_PHOTO_PATH } from './admin';
 
 /** Shared limits — the single source of truth for the partner form UI and the API guard. */
 export const PARTNER_DESCRIPTION_MIN = 20;
@@ -50,12 +50,19 @@ export const partnerSubmissionSchema = z
     hasVegOptions: z.boolean().default(false),
     hours: z
       .array(
-        z.object({
-          dayOfWeek: z.number().int().min(0).max(6),
-          opensAt: z.number().int().min(0).max(1440),
-          // closesAt may exceed 1440 to model past-midnight closings.
-          closesAt: z.number().int().min(1).max(2880),
-        }),
+        z
+          .object({
+            dayOfWeek: z.number().int().min(0).max(6),
+            opensAt: z.number().int().min(0).max(1440),
+            // closesAt may exceed 1440 to model past-midnight closings.
+            closesAt: z.number().int().min(1).max(2880),
+          })
+          // Same guard as the admin schema — see openingHourSlotError there for
+          // why a backwards range is worse than a rejected one.
+          .refine((h) => h.closesAt > h.opensAt, {
+            message: openingHourSlotError,
+            path: ['closesAt'],
+          }),
       )
       .max(21)
       .default([]),

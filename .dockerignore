@@ -1,0 +1,41 @@
+# Build context is the repo root for both images — keep it small and keep secrets out.
+
+.git
+.github
+.vscode
+
+node_modules
+**/node_modules
+
+dist
+**/dist
+coverage
+**/coverage
+*.tsbuildinfo
+.vite
+**/.vite
+
+# Secrets — never bake these into an image layer. Real values come from the
+# runtime environment (compose `environment:` / `--env-file`).
+.env
+.env.*
+!.env.example
+**/.env
+**/.env.*
+!**/.env.example
+
+# User uploads are runtime state on a volume, not build input.
+apps/api/uploads
+
+# Local-only operational scripts (also gitignored).
+apps/api/scripts
+
+*.log
+logs
+.DS_Store
+
+Dockerfile
+**/Dockerfile
+.dockerignore
+docker-compose.yml
+docker-compose.*.yml

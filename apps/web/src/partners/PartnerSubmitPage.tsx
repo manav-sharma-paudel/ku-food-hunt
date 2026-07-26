@@ -53,10 +53,15 @@ export default function PartnerSubmitPage() {
   const [searchParams] = useSearchParams();
   const token = searchParams.get('token');
 
-  // Edit link: load the existing submission back into the form.
+  // Edit link: load the existing submission back into the form. The token comes
+  // straight off the query string, so it is encoded before going into the path —
+  // otherwise a crafted `?token=../../…` rewrites which endpoint gets called.
   const prefill = useQuery({
     queryKey: ['partner-submission', token],
-    queryFn: () => apiGet<{ data: PartnerSubmissionDto }>(`/partners/submissions/${token}`),
+    queryFn: () =>
+      apiGet<{ data: PartnerSubmissionDto }>(
+        `/partners/submissions/${encodeURIComponent(token ?? '')}`,
+      ),
     enabled: Boolean(token),
     retry: false,
     staleTime: Infinity,

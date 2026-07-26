@@ -930,7 +930,37 @@ async function createRestaurant(
   return restaurant;
 }
 
+/**
+ * This seed is destructive: it deletes every restaurant (cascading to hours,
+ * images, menus, reviews and pending partner submissions), every category, and
+ * every site setting before writing sample data.
+ *
+ * Guarding on NODE_ENV does not work here. This file imports neither dotenv nor
+ * src/config/env, and the Prisma CLI only reads .env for DATABASE_URL — so
+ * NODE_ENV is undefined during a normal `pnpm db:seed` no matter which database
+ * DATABASE_URL points at. Instead, ask the database itself whether it already
+ * holds real data, which is true exactly when it matters.
+ */
+async function assertSafeToWipe(): Promise<void> {
+  if (process.env.SEED_CONFIRM_DESTRUCTIVE === 'yes') return;
+
+  const [restaurants, reviews] = await Promise.all([
+    prisma.restaurant.count(),
+    prisma.review.count(),
+  ]);
+  if (restaurants === 0 && reviews === 0) return;
+
+  throw new Error(
+    `Refusing to seed: this database already holds ${restaurants} restaurant(s) and ` +
+      `${reviews} review(s), and seeding deletes all of them.\n` +
+      `  If that is genuinely what you want, re-run with SEED_CONFIRM_DESTRUCTIVE=yes.\n` +
+      `  To only create or update the admin account, run scripts/create-admins.ts instead.`,
+  );
+}
+
 async function main() {
+  await assertSafeToWipe();
+
   console.log('Clearing existing data…');
   await prisma.restaurant.deleteMany(); // cascades to hours/images/menu/reviews
   await prisma.category.deleteMany();
@@ -957,22 +987,26 @@ async function main() {
   console.log('Ensuring admin account…');
   const adminEmail = process.env.ADMIN_SEED_EMAIL ?? 'admin@kufoodhunt.app';
   const adminPassword = process.env.ADMIN_SEED_PASSWORD;
-  // The fallback password lives in this public repo — seeding it anywhere but
-  // local dev would hand out a working SUPERADMIN login.
-  if (!adminPassword && process.env.NODE_ENV === 'production') {
-    throw new Error('ADMIN_SEED_PASSWORD must be set when seeding a production database.');
+
+  // The fallback password lives in this public repo, so an existing account is
+  // never silently reset to it — re-seeding leaves a rotated password alone
+  // unless ADMIN_SEED_PASSWORD explicitly says otherwise.
+  const existingAdmin = await prisma.admin.findUnique({ where: { email: adminEmail } });
+  if (existingAdmin && !adminPassword) {
+    console.log(`  admin ${adminEmail} already exists — password left unchanged`);
+  } else {
+    const passwordHash = await hashPassword(adminPassword ?? 'kufoodhunt-dev');
+    await prisma.admin.upsert({
+      where: { email: adminEmail },
+      update: { passwordHash },
+      create: { email: adminEmail, name: 'KU Food Hunt Admin', role: 'SUPERADMIN', passwordHash },
+    });
+    console.log(
+      adminPassword
+        ? `  admin login → ${adminEmail} (password from ADMIN_SEED_PASSWORD)`
+        : `  admin login → ${adminEmail} / kufoodhunt-dev (dev default)`,
+    );
   }
-  const passwordHash = await hashPassword(adminPassword ?? 'kufoodhunt-dev');
-  await prisma.admin.upsert({
-    where: { email: adminEmail },
-    update: { passwordHash },
-    create: { email: adminEmail, name: 'KU Food Hunt Admin', role: 'SUPERADMIN', passwordHash },
-  });
-  console.log(
-    adminPassword
-      ? `  admin login → ${adminEmail} (password from ADMIN_SEED_PASSWORD)`
-      : `  admin login → ${adminEmail} / kufoodhunt-dev (dev default)`,
-  );
 
   const counts = {
     restaurants: await prisma.restaurant.count(),

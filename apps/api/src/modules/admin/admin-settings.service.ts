@@ -8,6 +8,7 @@ import type { AuditLog, Prisma } from '@prisma/client';
 
 import { writeAudit } from '../../lib/audit';
 import { prisma } from '../../lib/prisma';
+import { HttpError } from '../../middleware/error-handler';
 
 const HERO_KEY = 'hero_content';
 
@@ -53,6 +54,26 @@ export async function getOverview(): Promise<AdminOverviewDto> {
 
 /** Replace the featured set: the given ids become featured in order; all others are cleared. */
 export async function setFeatured(ids: string[], adminId: string): Promise<void> {
+  // Check the ids up front. Feeding an unknown id straight to `update` throws a
+  // raw Prisma error that surfaces as a bare 500, and featuring a draft or
+  // archived listing puts a row in the homepage manager that the public
+  // homepage will never render.
+  if (ids.length) {
+    const found = await prisma.restaurant.findMany({
+      where: { id: { in: ids }, status: 'PUBLISHED', deletedAt: null },
+      select: { id: true },
+    });
+    if (found.length !== ids.length) {
+      const known = new Set(found.map((r) => r.id));
+      const missing = ids.filter((id) => !known.has(id));
+      throw new HttpError(
+        400,
+        'VALIDATION_ERROR',
+        `Only published restaurants can be featured; ${missing.length} of the selected ${ids.length} are not.`,
+      );
+    }
+  }
+
   await prisma.$transaction(async (tx) => {
     await tx.restaurant.updateMany({
       where: { isFeatured: true },

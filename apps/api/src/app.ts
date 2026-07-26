@@ -25,7 +25,10 @@ export function createApp() {
   const app = express();
 
   app.disable('x-powered-by');
-  app.set('trust proxy', 1);
+  // Must match the real number of proxies in front of this process — see the
+  // TRUST_PROXY notes in config/env.ts. Defaults to 0 (direct exposure) so a
+  // missing value fails closed: X-Forwarded-For is ignored rather than trusted.
+  app.set('trust proxy', env.TRUST_PROXY);
 
   app.use(
     helmet({

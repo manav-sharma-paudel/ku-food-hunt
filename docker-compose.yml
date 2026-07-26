@@ -1,0 +1,136 @@
+# KU Food Hunt — full stack: Postgres + API + web.
+#
+#   cp .env.example .env      # fill in the required values, then
+#   docker compose up --build
+#   docker compose run --rm migrate     # first run only, and after any new migration
+#
+# Then open http://localhost:8080 (admin at /admin, partner form at /partners).
+
+name: ku-food-hunt
+
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-ku_food_hunt}
+      POSTGRES_USER: ${POSTGRES_USER:-kfh}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      # `api` waits on this, so it must test the actual database and role, not
+      # just that the port is open — Postgres accepts connections briefly during
+      # first-run initdb before the database exists.
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-kfh} -d ${POSTGRES_DB:-ku_food_hunt}']
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    # Not published. Nothing outside this network needs Postgres; uncomment to
+    # attach a local client such as Prisma Studio.
+    # ports:
+    #   - '5432:5432'
+
+  # One-shot schema migration. Behind a profile so `docker compose up` never runs
+  # it implicitly — schema changes should be a deliberate, observed step.
+  #
+  #   docker compose run --rm migrate
+  #
+  # It runs `prisma migrate deploy`, which only applies pending migrations and is
+  # safe to re-run.
+  #
+  # It deliberately does NOT seed. prisma/seed.ts opens with unconditional
+  # deleteMany() calls across Restaurant, Category and SiteSetting — which cascade
+  # to every review, photo, menu and pending partner submission — and then rewrites
+  # the admin password to a value published in the README unless ADMIN_SEED_PASSWORD
+  # is set. Its only guard is `NODE_ENV === 'production'`, which cannot fire here:
+  # the seed imports neither dotenv nor config/env, so NODE_ENV is undefined no
+  # matter which database DATABASE_URL points at.
+  migrate:
+    profiles: ['tools']
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+      target: builder
+    working_dir: /app/apps/api
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql://${POSTGRES_USER:-kfh}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-ku_food_hunt}}
+    command: ['pnpm', 'exec', 'prisma', 'migrate', 'deploy']
+    depends_on:
+      db:
+        condition: service_healthy
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+      target: runner
+    restart: unless-stopped
+    init: true
+    environment:
+      NODE_ENV: production
+      PORT: 4000
+
+      # Exactly one proxy (the nginx `web` service) sits in front of this
+      # process, and its port is not published, so there is no second path in.
+      # Add a CDN in front of nginx and this has to become 2, or req.ip resolves
+      # to the CDN edge and every rate limit becomes one global bucket.
+      TRUST_PROXY: 1
+      DATABASE_URL: ${DATABASE_URL:-postgresql://${POSTGRES_USER:-kfh}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-ku_food_hunt}}
+
+      # Both must be absolute URLs or the app refuses to boot (config/env.ts).
+      # CORS is not actually exercised in this topology — nginx proxies /api on
+      # the same origin — but the value still has to parse.
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:8080}
+      SITE_URL: ${SITE_URL:-http://localhost:8080}
+
+      # Salts the one-way IP/User-Agent hashes on reviews and votes. The app
+      # refuses to start in production while this is the dev default, so it has
+      # no fallback here on purpose.
+      REVIEW_HASH_SALT: ${REVIEW_HASH_SALT:?set REVIEW_HASH_SALT in .env (use `openssl rand -hex 32`)}
+
+      # Optional — but do not set TURNSTILE_SECRET yet. The web client renders no
+      # Turnstile widget and never sends a token, while verifyTurnstile() returns
+      # false whenever a secret is present and the token is missing. Setting this
+      # rejects every genuine review and partner submission with 403.
+      TURNSTILE_SECRET: ${TURNSTILE_SECRET:-}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      MAIL_FROM: ${MAIL_FROM:-KU Food Hunt <onboarding@resend.dev>}
+      PARTNERS_URL: ${PARTNERS_URL:-}
+    volumes:
+      # Review and restaurant photos are written to process.cwd()/uploads, which
+      # is /app/apps/api/uploads in this image. Without this volume every photo
+      # is lost the moment the container is replaced.
+      - uploads:/app/apps/api/uploads
+    depends_on:
+      db:
+        condition: service_healthy
+    # Intentionally not published. Reaching the API only through nginx keeps it
+    # exactly one proxy hop from the client, which is what the app's
+    # `trust proxy: 1` assumes — publishing this port creates a second path where
+    # req.ip resolves to the Docker bridge gateway instead of the caller, and
+    # every rate limit silently becomes one shared bucket across all traffic.
+    # ports:
+    #   - '4000:4000'
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      # VITE_* values are compiled into the bundle. Changing one in .env requires
+      # `docker compose build web`, not just a restart.
+      args:
+        VITE_SITE_URL: ${SITE_URL:-http://localhost:8080}
+        VITE_ANALYTICS_DOMAIN: ${VITE_ANALYTICS_DOMAIN:-}
+        VITE_ANALYTICS_SRC: ${VITE_ANALYTICS_SRC:-}
+    restart: unless-stopped
+    ports:
+      - '${WEB_PORT:-8080}:80'
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  pgdata:
+  uploads:

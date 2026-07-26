@@ -36,6 +36,45 @@ pnpm dev        # web on :5173, api on :4000 (web proxies /api and /healthz to t
 
 Useful: `pnpm --filter @ku-food-hunt/api db:studio` opens Prisma Studio to browse/edit data.
 
+## Docker
+
+Runs the whole stack — Postgres 17, the API, and nginx serving the built SPA — with no local
+Node, pnpm, or Postgres install.
+
+```sh
+cp .env.example .env    # set POSTGRES_PASSWORD and REVIEW_HASH_SALT (openssl rand -hex 32)
+docker compose up --build
+docker compose run --rm migrate    # first run, and after any new migration
+```
+
+The site is then on <http://localhost:8080> — admin at `/admin`, partner form at `/partners`.
+
+| File                                       | What it is                                            |
+| ------------------------------------------ | ----------------------------------------------------- |
+| [apps/api/Dockerfile](apps/api/Dockerfile) | Node 22 (Debian slim, for Prisma's OpenSSL) → `dist/` |
+| [apps/web/Dockerfile](apps/web/Dockerfile) | Vite build → nginx, with SPA fallback + API proxy     |
+| [apps/web/nginx.conf](apps/web/nginx.conf) | Same-origin `/api`, `/uploads`, `/sitemap.xml`; CSP   |
+| [docker-compose.yml](docker-compose.yml)   | db + api + web, plus an opt-in `migrate` service      |
+
+Worth knowing before changing any of it:
+
+- **Build context is the repo root** for both images, not the app directory — both depend on the
+  `@ku-food-hunt/shared` workspace package, so pnpm needs the workspace manifest and lockfile.
+- **`VITE_*` variables are build args, not runtime env.** Vite inlines them into the bundle, so
+  changing `SITE_URL` means `docker compose build web`, not a restart.
+- **Migrations are opt-in** (`docker compose run --rm migrate` runs `prisma migrate deploy`, which
+  is additive and safe to re-run). There is deliberately no seed service: `prisma/seed.ts` opens
+  with unconditional `deleteMany()` calls across `Restaurant`, `Category` and `SiteSetting`, and
+  rewrites the admin password to the dev default unless `ADMIN_SEED_PASSWORD` is set. Its only
+  guard is a `NODE_ENV === 'production'` check, which cannot fire in this container because the
+  seed never loads dotenv.
+- **The API port is not published.** Traffic reaches it only through nginx, which keeps it exactly
+  one proxy hop from the client — what the app's `trust proxy: 1` assumes. Publishing it creates a
+  second path where `req.ip` resolves to the Docker bridge gateway instead of the caller, and every
+  rate limit silently collapses into one shared bucket.
+- **Uploaded photos live on the `uploads` volume.** The API writes to `process.cwd()/uploads`, so
+  the image's `WORKDIR` and that volume mount have to stay in step.
+
 ## Workspace layout
 
 ```
