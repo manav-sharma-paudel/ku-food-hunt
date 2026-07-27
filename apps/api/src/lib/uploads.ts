@@ -78,6 +78,35 @@ export async function assertPhotoSignature(file: Express.Multer.File): Promise<v
   }
 }
 
+/**
+ * Delete the file backing a stored photo URL.
+ *
+ * Removing the database row alone is not enough: /uploads is served straight off
+ * disk with `immutable, max-age=30d`, so an orphaned file stays publicly
+ * fetchable at its original URL forever. Anyone who saw the URL — or scraped it
+ * before moderation — keeps access to a photo an admin believes they deleted.
+ *
+ * The filename is re-validated here rather than trusted from the database, so a
+ * malformed or hand-edited row can never walk this out of the uploads tree.
+ */
+const STORED_PHOTO_URL = /^\/uploads\/(reviews|restaurants)\/([\w-]+\.(?:jpe?g|png|webp))$/i;
+
+export async function deleteStoredPhoto(url: string): Promise<void> {
+  const match = STORED_PHOTO_URL.exec(url);
+  if (!match) return;
+
+  const [, dir, filename] = match as unknown as [string, string, string];
+  const target = path.join(UPLOADS_ROOT, dir, filename);
+
+  // Belt and braces: the regex already forbids separators and `..`, but resolve
+  // and confirm containment before unlinking anything.
+  const resolved = path.resolve(target);
+  if (resolved !== target || !resolved.startsWith(UPLOADS_ROOT + path.sep)) return;
+
+  // ENOENT is fine — the row outliving the file is the harmless direction.
+  await unlink(resolved).catch(() => {});
+}
+
 /** Turn multer's internal errors into the app's HttpError envelope. */
 export function translateUploadError(err: unknown): HttpError {
   if (err instanceof HttpError) return err;

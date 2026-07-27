@@ -23,6 +23,7 @@ import { Prisma } from '@prisma/client';
 import { writeAudit } from '../../lib/audit';
 import { sha256Hex } from '../../lib/hash';
 import { prisma } from '../../lib/prisma';
+import { deleteStoredPhoto } from '../../lib/uploads';
 import { HttpError } from '../../middleware/error-handler';
 import { sendSubmissionApproved, sendSubmissionRejected } from '../partners/partner-emails';
 
@@ -479,6 +480,9 @@ export async function deleteImage(
 ): Promise<AdminRestaurantDto> {
   const img = await findOwnedImage(restaurantId, imageId);
   await prisma.restaurantImage.delete({ where: { id: imageId } });
+  // Drop the file too — /uploads is served off disk with a 30-day immutable
+  // cache, so a row-only delete leaves the photo publicly fetchable forever.
+  await deleteStoredPhoto(img.url);
   await writeAudit(adminId, 'restaurant.image.delete', 'restaurant', img.restaurantId);
   return getAdminRestaurant(img.restaurantId);
 }
