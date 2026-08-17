@@ -95,4 +95,4 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
 
 # Run Prisma migrations then start the server.
 # Migrations run at startup so the schema stays in sync across deploys.
-CMD ["sh", "-c", "npx prisma migrate deploy --schema prisma/schema.prisma && node dist/index.js"]
+CMD ["sh", "-c", "npx prisma migrate deploy --schema prisma/schema.prisma && npx prisma db seed --schema prisma/schema.prisma && node dist/index.js"]
