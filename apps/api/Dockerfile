@@ -93,7 +93,6 @@ EXPOSE 4000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
     CMD node -e "fetch('http://127.0.0.1:'+(process.env.PORT||4000)+'/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 
-# index.ts installs its own SIGINT/SIGTERM handlers for graceful shutdown, so
-# node can run as PID 1 — but run the container with `init: true` (compose) or
-# `--init` so orphaned children are still reaped.
-CMD ["node", "dist/index.js"]
+# Run Prisma migrations then start the server.
+# Migrations run at startup so the schema stays in sync across deploys.
+CMD ["sh", "-c", "npx prisma migrate deploy --schema prisma/schema.prisma && node dist/index.js"]
