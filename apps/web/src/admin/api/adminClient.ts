@@ -38,7 +38,7 @@ async function request<T>(method: Method, path: string, body?: unknown): Promise
     res = await fetch(`${BASE_URL}${path}`, {
       method,
       headers,
-      credentials: 'same-origin',
+      credentials: 'include',
       body: body === undefined ? undefined : JSON.stringify(body),
     });
   } catch {
@@ -59,7 +59,7 @@ export async function adminUpload<T>(path: string, file: File): Promise<T> {
     res = await fetch(`${BASE_URL}${path}`, {
       method: 'POST',
       headers: csrfToken ? { 'x-csrf-token': csrfToken } : {},
-      credentials: 'same-origin',
+      credentials: 'include',
       body: form,
     });
   } catch {
