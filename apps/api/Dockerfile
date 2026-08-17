@@ -26,7 +26,7 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 # Pin pnpm to the version in the root package.json `packageManager` field.
-ARG PNPM_VERSION=11.13.0
+ARG PNPM_VERSION=11.15.1
 RUN npm install -g pnpm@${PNPM_VERSION}
 
 WORKDIR /app
@@ -83,7 +83,6 @@ COPY --from=builder --chown=node:node /app /app
 # lost when the container is replaced.
 WORKDIR /app/apps/api
 RUN mkdir -p uploads/reviews uploads/restaurants && chown -R node:node uploads
-VOLUME ["/app/apps/api/uploads"]
 
 USER node
 

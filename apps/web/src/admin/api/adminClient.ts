@@ -1,6 +1,6 @@
 import { ApiError } from '../../api/client';
 
-const BASE_URL = '/api/v1/admin';
+const BASE_URL = (import.meta.env.VITE_API_URL || '/api/v1') + '/admin';
 
 // The CSRF token from login/me, replayed as a header on every mutating request.
 // SameSite=Lax already blocks cross-site cookie sends; this is defence-in-depth.

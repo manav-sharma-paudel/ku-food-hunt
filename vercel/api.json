@@ -1,0 +1,12 @@
+{
+  "installCommand": "pnpm install",
+  "buildCommand": "cd apps/api && npx prisma generate && npx tsup",
+  "outputDirectory": "apps/api/dist",
+  "framework": null,
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "/api/index.mjs"
+    }
+  ]
+}

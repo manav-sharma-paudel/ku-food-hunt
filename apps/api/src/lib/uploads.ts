@@ -15,8 +15,16 @@ import { HttpError } from '../middleware/error-handler';
 export const UPLOADS_ROOT = path.resolve(process.cwd(), 'uploads');
 export const REVIEW_PHOTOS_DIR = path.join(UPLOADS_ROOT, 'reviews');
 export const RESTAURANT_PHOTOS_DIR = path.join(UPLOADS_ROOT, 'restaurants');
-mkdirSync(REVIEW_PHOTOS_DIR, { recursive: true });
-mkdirSync(RESTAURANT_PHOTOS_DIR, { recursive: true });
+
+// On serverless platforms (Vercel) the filesystem outside /tmp is read-only,
+// so directory creation is best-effort — uploads simply won't work there until
+// a cloud storage adapter (S3 / Cloudinary) is wired in.
+try {
+  mkdirSync(REVIEW_PHOTOS_DIR, { recursive: true });
+  mkdirSync(RESTAURANT_PHOTOS_DIR, { recursive: true });
+} catch {
+  // Silently ignore — upload routes will return an error at request time.
+}
 
 export const MAX_PHOTO_BYTES = 4 * 1024 * 1024; // 4 MB
 
