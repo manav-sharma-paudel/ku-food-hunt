@@ -5,7 +5,7 @@ import { z } from 'zod';
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().int().positive().default(4000),
-  CORS_ORIGIN: z.url().default('http://localhost:5173'),
+  CORS_ORIGIN: z.string().default('http://localhost:5173'),
   // Public origin used for absolute URLs in the sitemap. Set to the real domain in prod.
   SITE_URL: z.url().default('http://localhost:5173'),
   DATABASE_URL: z.string().min(1, 'DATABASE_URL is required'),

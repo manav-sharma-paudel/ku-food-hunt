@@ -39,7 +39,16 @@ export function createApp() {
       // HTML the API itself might emit.
     }),
   );
-  app.use(cors({ origin: env.CORS_ORIGIN, credentials: true }));
+  const allowedOrigins = env.CORS_ORIGIN.split(',').map((o) => o.trim());
+  app.use(
+    cors({
+      origin: (origin, cb) => {
+        if (!origin || allowedOrigins.includes(origin)) cb(null, true);
+        else cb(null, false);
+      },
+      credentials: true,
+    }),
+  );
   app.use(express.json({ limit: '1mb' }));
   app.use(cookieParser());
   app.use(
