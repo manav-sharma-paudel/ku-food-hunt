@@ -12,7 +12,7 @@ const sha256 = (value: string) => createHash('sha256').update(value).digest('hex
 function cookieOptions(): CookieOptions {
   return {
     httpOnly: true,
-    sameSite: 'lax',
+    sameSite: 'none',
     secure: env.NODE_ENV === 'production',
     path: '/',
     maxAge: SESSION_TTL_MS,
