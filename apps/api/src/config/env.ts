@@ -31,6 +31,13 @@ const envSchema = z.object({
   // Cloudflare Turnstile secret. When unset (dev), the review form skips the check;
   // when present (prod), submissions must carry a valid token.
   TURNSTILE_SECRET: z.string().optional(),
+  // Deliberate, explicit opt-out from bot protection in production. Without this,
+  // a production boot with no TURNSTILE_SECRET fails closed rather than silently
+  // running with the challenge disabled (see the production check below).
+  TURNSTILE_DISABLED: z
+    .string()
+    .optional()
+    .transform((v) => v === 'true' || v === '1'),
   // Transactional email via Resend. When unset (dev), emails are logged, not sent.
   RESEND_API_KEY: z.string().optional(),
   MAIL_FROM: z.string().default('KU Food Hunt <onboarding@resend.dev>'),
@@ -60,9 +67,26 @@ if (parsed.data.NODE_ENV === 'production') {
     );
     process.exit(1);
   }
-  if (!parsed.data.TURNSTILE_SECRET) {
+  // Bot protection must not be silently off in production. Either configure
+  // Turnstile (TURNSTILE_SECRET + the client widget) or opt out on purpose with
+  // TURNSTILE_DISABLED=true — a warning alone is too easy to miss.
+  if (!parsed.data.TURNSTILE_SECRET && !parsed.data.TURNSTILE_DISABLED) {
+    console.error(
+      'Refusing to start: TURNSTILE_SECRET is not set in production, so review and partner ' +
+        'submissions would run with no bot protection. Set TURNSTILE_SECRET (recommended), or ' +
+        'set TURNSTILE_DISABLED=true to run without it deliberately.',
+    );
+    process.exit(1);
+  }
+  // req.ip drives every rate limiter and the salted review/vote fingerprint. If
+  // the app sits behind a proxy/CDN (Vercel, Railway, nginx) but TRUST_PROXY is
+  // 0, req.ip collapses to the proxy's address for every visitor — one shared
+  // rate-limit bucket and one shared fingerprint. Loudly flag the likely misconfig.
+  if (parsed.data.TRUST_PROXY === 0) {
     console.warn(
-      'TURNSTILE_SECRET is not set: review and partner submissions run without bot protection.',
+      'TRUST_PROXY is 0 in production. If this app runs behind any proxy/CDN, set it to the real ' +
+        'proxy hop count (e.g. 1 for a single nginx/Railway edge, 2 for Vercel→Railway) — otherwise ' +
+        'every rate limiter and the review/vote fingerprint collapse into one global bucket.',
     );
   }
 }

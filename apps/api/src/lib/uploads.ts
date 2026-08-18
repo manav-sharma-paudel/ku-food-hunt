@@ -1,8 +1,9 @@
 import { randomUUID } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
-import { open, unlink } from 'node:fs/promises';
+import { readFile, unlink } from 'node:fs/promises';
 import path from 'node:path';
 
+import { imageSize } from 'image-size';
 import multer, { MulterError } from 'multer';
 
 import { HttpError } from '../middleware/error-handler';
@@ -27,6 +28,11 @@ try {
 }
 
 export const MAX_PHOTO_BYTES = 4 * 1024 * 1024; // 4 MB
+
+// A 4 MB file can still decode to an enormous raster (a "decompression bomb"):
+// e.g. a highly-compressible PNG declaring 30000×30000 px. Serving that hangs or
+// OOMs every browser that renders it, so we cap the decoded pixel count too.
+export const MAX_IMAGE_PIXELS = 30_000_000; // ~30 megapixels
 
 const EXT_BY_MIME: Record<string, string> = {
   'image/jpeg': '.jpg',
@@ -64,25 +70,39 @@ const SIGNATURES: Record<string, (b: Buffer) => boolean> = {
     b.subarray(8, 12).toString('latin1') === 'WEBP',
 };
 
-/** Reject (and delete) an upload whose content doesn't match its declared image type. */
+/**
+ * Reject (and delete) an upload that isn't genuinely the image type it claims —
+ * either because its magic bytes don't match, or because its decoded dimensions
+ * are implausibly large (a decompression bomb).
+ */
 export async function assertPhotoSignature(file: Express.Multer.File): Promise<void> {
-  const matches = SIGNATURES[file.mimetype];
-  const head = Buffer.alloc(12);
-  let ok: boolean;
-  try {
-    const fh = await open(file.path, 'r');
-    try {
-      await fh.read(head, 0, head.length, 0);
-    } finally {
-      await fh.close();
-    }
-    ok = Boolean(matches?.(head));
-  } catch {
-    ok = false;
-  }
-  if (!ok) {
+  const reject = async (status: number, code: string, message: string): Promise<never> => {
     await unlink(file.path).catch(() => {});
-    throw new HttpError(415, 'UNSUPPORTED_MEDIA_TYPE', 'That file is not a valid image.');
+    throw new HttpError(status, code, message);
+  };
+
+  let buf: Buffer;
+  try {
+    buf = await readFile(file.path);
+  } catch {
+    return reject(415, 'UNSUPPORTED_MEDIA_TYPE', 'That file is not a valid image.');
+  }
+
+  const matches = SIGNATURES[file.mimetype];
+  if (!matches?.(buf.subarray(0, 12))) {
+    return reject(415, 'UNSUPPORTED_MEDIA_TYPE', 'That file is not a valid image.');
+  }
+
+  let dims: { width?: number; height?: number };
+  try {
+    dims = imageSize(buf);
+  } catch {
+    return reject(415, 'UNSUPPORTED_MEDIA_TYPE', 'That file is not a valid image.');
+  }
+  const width = dims.width ?? 0;
+  const height = dims.height ?? 0;
+  if (width < 1 || height < 1 || width * height > MAX_IMAGE_PIXELS) {
+    return reject(413, 'PAYLOAD_TOO_LARGE', 'That image is too large in dimensions.');
   }
 }
 

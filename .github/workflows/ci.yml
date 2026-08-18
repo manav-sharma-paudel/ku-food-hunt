@@ -35,3 +35,20 @@ jobs:
 
       - name: Build
         run: pnpm build
+
+      # Security gate: fail the build on a known-high/critical advisory in the
+      # dependency tree. Tune --audit-level if a specific advisory needs waiving.
+      - name: Dependency audit
+        run: pnpm audit --audit-level=high
+
+  secret-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # full history so the scan sees every commit
+
+      - name: Scan for committed secrets
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,6 +1,6 @@
 import type { ReviewDto } from '@ku-food-hunt/shared';
 import { ThumbsUp } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import { useVoteHelpful } from '../../api/queries';
 import { cn } from '../../lib/cn';
@@ -23,6 +23,13 @@ export function ReviewCard({ review, onPhotoClick }: ReviewCardProps) {
   const vote = useVoteHelpful();
   const [voted, setVoted] = useState(() => hasVotedHelpful(review.id));
   const [count, setCount] = useState(review.helpfulCount);
+
+  // Re-sync when the server count actually changes (e.g. a background refetch
+  // after someone else votes). Keyed on the value, so it never clobbers an
+  // in-flight optimistic update — that only holds a value the prop doesn't yet have.
+  useEffect(() => {
+    setCount(review.helpfulCount);
+  }, [review.helpfulCount]);
 
   const handleVote = () => {
     if (vote.isPending) return;

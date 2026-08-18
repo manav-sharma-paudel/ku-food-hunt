@@ -2,6 +2,7 @@ import {
   canApproveSubmission,
   canRejectSubmission,
   canSetRestaurantStatus,
+  derivePriceBand,
   restaurantStatusDeniedReason,
   slugify,
   type AdminRestaurantDto,
@@ -221,7 +222,10 @@ export async function createRestaurant(
       googlePlaceId: input.googlePlaceId ?? null,
       latitude: input.latitude,
       longitude: input.longitude,
-      priceBand: input.priceBand,
+      priceBand:
+        input.priceBand ??
+        derivePriceBand(input.priceMinNpr ?? null, input.priceMaxNpr ?? null) ??
+        'STANDARD',
       priceMinNpr: input.priceMinNpr ?? null,
       priceMaxNpr: input.priceMaxNpr ?? null,
       hasQrPayment: input.hasQrPayment,
@@ -252,7 +256,7 @@ export async function updateRestaurant(
 ): Promise<AdminRestaurantDto> {
   const current = await prisma.restaurant.findFirst({
     where: { id, deletedAt: null },
-    select: { status: true },
+    select: { status: true, priceBand: true, priceMinNpr: true, priceMaxNpr: true },
   });
   if (!current) throw new HttpError(404, 'NOT_FOUND', 'Restaurant not found');
   // Editing an already-live listing without touching its status is normal
@@ -270,9 +274,18 @@ export async function updateRestaurant(
   if (input.googlePlaceId !== undefined) data.googlePlaceId = input.googlePlaceId ?? null;
   if (input.latitude !== undefined) data.latitude = input.latitude;
   if (input.longitude !== undefined) data.longitude = input.longitude;
-  if (input.priceBand !== undefined) data.priceBand = input.priceBand;
   if (input.priceMinNpr !== undefined) data.priceMinNpr = input.priceMinNpr ?? null;
   if (input.priceMaxNpr !== undefined) data.priceMaxNpr = input.priceMaxNpr ?? null;
+  // The band is derived from the Rs. range the admin edits. Recompute it whenever
+  // a price field changes; an explicit priceBand (e.g. from an API caller) still
+  // wins, and unrelated edits leave the stored band untouched.
+  if (input.priceBand !== undefined) {
+    data.priceBand = input.priceBand;
+  } else if (input.priceMinNpr !== undefined || input.priceMaxNpr !== undefined) {
+    const effMin = input.priceMinNpr !== undefined ? input.priceMinNpr : current.priceMinNpr;
+    const effMax = input.priceMaxNpr !== undefined ? input.priceMaxNpr : current.priceMaxNpr;
+    data.priceBand = derivePriceBand(effMin, effMax) ?? current.priceBand;
+  }
   if (input.hasQrPayment !== undefined) data.hasQrPayment = input.hasQrPayment;
   if (input.hasDelivery !== undefined) data.hasDelivery = input.hasDelivery;
   if (input.hasVegOptions !== undefined) data.hasVegOptions = input.hasVegOptions;

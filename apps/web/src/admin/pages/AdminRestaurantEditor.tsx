@@ -1,9 +1,4 @@
-import {
-  PRICE_BANDS,
-  PRICE_BAND_LABELS,
-  type AdminRestaurantDto,
-  type PriceBand,
-} from '@ku-food-hunt/shared';
+import { type AdminRestaurantDto } from '@ku-food-hunt/shared';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, Loader2 } from 'lucide-react';
 import { useState } from 'react';
@@ -38,7 +33,6 @@ function CreateRestaurantView() {
   const navigate = useNavigate();
   const [name, setName] = useState('');
   const [address, setAddress] = useState('');
-  const [priceBand, setPriceBand] = useState<PriceBand>('STANDARD');
   const [priceMin, setPriceMin] = useState('');
   const [priceMax, setPriceMax] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -50,7 +44,6 @@ function CreateRestaurantView() {
       adminEndpoints.createRestaurant({
         name: name.trim(),
         address: address.trim(),
-        priceBand,
         priceMinNpr: toNum(priceMin),
         priceMaxNpr: toNum(priceMax),
         // Sensible default; refined on the Location tab right after creation.
@@ -112,23 +105,6 @@ function CreateRestaurantView() {
             className={adminInput}
           />
         </div>
-        <div>
-          <label htmlFor="price" className={adminLabel}>
-            Price band
-          </label>
-          <select
-            id="price"
-            value={priceBand}
-            onChange={(e) => setPriceBand(e.target.value as PriceBand)}
-            className={adminInput}
-          >
-            {PRICE_BANDS.map((b) => (
-              <option key={b} value={b}>
-                {PRICE_BAND_LABELS[b]}
-              </option>
-            ))}
-          </select>
-        </div>
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
             <label htmlFor="price-min" className={adminLabel}>
@@ -162,8 +138,8 @@ function CreateRestaurantView() {
           </div>
         </div>
         <p className="text-xs text-muted">
-          Optional — the exact Rs. range shown on the restaurant page. The price band above is the
-          coarse bucket used by the public price filter.
+          Optional — the exact Rs. range shown on the restaurant page. The public price
+          filter&apos;s coarse bucket is derived from this range automatically.
         </p>
 
         {error && (

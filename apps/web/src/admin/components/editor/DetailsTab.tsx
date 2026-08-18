@@ -1,10 +1,7 @@
 import {
   canSetRestaurantStatus,
-  PRICE_BANDS,
-  PRICE_BAND_LABELS,
   RESTAURANT_STATUSES,
   type AdminRestaurantDto,
-  type PriceBand,
   type RestaurantStatusValue,
 } from '@ku-food-hunt/shared';
 import { useMutation } from '@tanstack/react-query';
@@ -37,7 +34,6 @@ export function DetailsTab({ restaurant }: { restaurant: AdminRestaurantDto }) {
     slug: restaurant.slug,
     description: restaurant.description ?? '',
     phone: restaurant.phone ?? '',
-    priceBand: restaurant.priceBand as PriceBand,
     priceMinNpr: restaurant.priceMinNpr?.toString() ?? '',
     priceMaxNpr: restaurant.priceMaxNpr?.toString() ?? '',
     status: restaurant.status as RestaurantStatusValue,
@@ -57,7 +53,6 @@ export function DetailsTab({ restaurant }: { restaurant: AdminRestaurantDto }) {
         slug: form.slug.trim() || undefined,
         description: form.description.trim() || null,
         phone: form.phone.trim() || null,
-        priceBand: form.priceBand,
         priceMinNpr: toNum(form.priceMinNpr),
         priceMaxNpr: toNum(form.priceMaxNpr),
         status: form.status,
@@ -111,20 +106,7 @@ export function DetailsTab({ restaurant }: { restaurant: AdminRestaurantDto }) {
         />
       </Field>
 
-      <div className="grid gap-4 sm:grid-cols-3">
-        <Field label="Price band">
-          <select
-            value={form.priceBand}
-            onChange={(e) => set('priceBand', e.target.value as PriceBand)}
-            className={adminInput}
-          >
-            {PRICE_BANDS.map((b) => (
-              <option key={b} value={b}>
-                {PRICE_BAND_LABELS[b]}
-              </option>
-            ))}
-          </select>
-        </Field>
+      <div className="grid gap-4 sm:grid-cols-2">
         <Field label="Min price (Rs.)">
           <input
             type="number"

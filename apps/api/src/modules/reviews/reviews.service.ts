@@ -21,6 +21,10 @@ export async function recomputeRestaurantRating(
   tx: Prisma.TransactionClient,
   restaurantId: string,
 ): Promise<void> {
+  // Serialize concurrent recomputes for the same restaurant. Without this row
+  // lock, two overlapping review writes can each aggregate a stale snapshot and
+  // overwrite each other, desyncing avgRating/reviewCount. Callers run in a tx.
+  await tx.$executeRaw`SELECT id FROM "Restaurant" WHERE id = ${restaurantId} FOR UPDATE`;
   const agg = await tx.review.aggregate({
     where: { restaurantId, status: 'PUBLISHED', deletedAt: null },
     _avg: { rating: true },
@@ -95,24 +99,33 @@ export async function toggleHelpful(
   if (!review) throw new HttpError(404, 'NOT_FOUND', 'Review not found');
 
   return prisma.$transaction(async (tx) => {
-    const existing = await tx.reviewVote.findUnique({
-      where: { reviewId_voterHash: { reviewId, voterHash } },
-      select: { id: true },
-    });
-
-    if (existing) {
-      await tx.reviewVote.delete({ where: { id: existing.id } });
+    // Toggle off: if a vote already existed, remove it and drop the count.
+    const removed = await tx.reviewVote.deleteMany({ where: { reviewId, voterHash } });
+    if (removed.count > 0) {
       const updated = await tx.review.update({
         where: { id: reviewId },
         // Guard against ever dropping below zero from any historical drift.
         data: { helpfulCount: { decrement: 1 } },
         select: { helpfulCount: true },
       });
-      const helpfulCount = Math.max(0, updated.helpfulCount);
-      return { helpfulCount, voted: false };
+      return { helpfulCount: Math.max(0, updated.helpfulCount), voted: false };
     }
 
-    await tx.reviewVote.create({ data: { reviewId, voterHash } });
+    // Toggle on: insert idempotently. skipDuplicates turns a concurrent
+    // double-submit (previously a P2002 → HTTP 500) into a harmless no-op.
+    const inserted = await tx.reviewVote.createMany({
+      data: [{ reviewId, voterHash }],
+      skipDuplicates: true,
+    });
+    if (inserted.count === 0) {
+      // A concurrent request already recorded this exact vote — stay idempotent
+      // and report the current count rather than double-incrementing.
+      const review = await tx.review.findUnique({
+        where: { id: reviewId },
+        select: { helpfulCount: true },
+      });
+      return { helpfulCount: Math.max(0, review?.helpfulCount ?? 0), voted: true };
+    }
     const updated = await tx.review.update({
       where: { id: reviewId },
       data: { helpfulCount: { increment: 1 } },

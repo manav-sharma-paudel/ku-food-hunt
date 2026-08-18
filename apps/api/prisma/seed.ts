@@ -985,27 +985,32 @@ async function main() {
   }
 
   console.log('Ensuring admin account…');
-  const adminEmail = process.env.ADMIN_SEED_EMAIL ?? 'admin@kufoodhunt.app';
+  // No default email and no fallback password: a publicly-known credential must
+  // never be created. Provisioning an admin is an explicit, opt-in action —
+  // supply BOTH ADMIN_SEED_EMAIL and ADMIN_SEED_PASSWORD, or no admin is created.
+  // Existing accounts are only created-if-missing, never password-reset here, so
+  // the accounts provisioned out-of-band keep their own passwords.
+  const adminEmail = process.env.ADMIN_SEED_EMAIL;
   const adminPassword = process.env.ADMIN_SEED_PASSWORD;
 
-  // The fallback password lives in this public repo, so an existing account is
-  // never silently reset to it — re-seeding leaves a rotated password alone
-  // unless ADMIN_SEED_PASSWORD explicitly says otherwise.
-  const existingAdmin = await prisma.admin.findUnique({ where: { email: adminEmail } });
-  if (existingAdmin && !adminPassword) {
-    console.log(`  admin ${adminEmail} already exists — password left unchanged`);
+  if (!adminEmail || !adminPassword) {
+    console.log(
+      '  skipped — set ADMIN_SEED_EMAIL and ADMIN_SEED_PASSWORD to provision an admin. ' +
+        'No default/public admin account is ever created.',
+    );
   } else {
-    const passwordHash = await hashPassword(adminPassword ?? 'kufoodhunt-dev');
+    const passwordHash = await hashPassword(adminPassword);
     await prisma.admin.upsert({
       where: { email: adminEmail },
-      update: { passwordHash },
-      create: { email: adminEmail, name: 'KU Food Hunt Admin', role: 'SUPERADMIN', passwordHash },
+      update: {}, // never silently reset an existing account's password
+      create: {
+        email: adminEmail.toLowerCase(),
+        name: 'KU Food Hunt Admin',
+        role: 'SUPERADMIN',
+        passwordHash,
+      },
     });
-    console.log(
-      adminPassword
-        ? `  admin login → ${adminEmail} (password from ADMIN_SEED_PASSWORD)`
-        : `  admin login → ${adminEmail} / kufoodhunt-dev (dev default)`,
-    );
+    console.log(`  admin ensured → ${adminEmail.toLowerCase()}`);
   }
 
   const counts = {

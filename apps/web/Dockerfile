@@ -17,7 +17,9 @@ ARG NGINX_VERSION=1.27
 # ───────────────────────────────────────────────────────────── builder
 FROM node:${NODE_VERSION}-bookworm-slim AS builder
 
-ARG PNPM_VERSION=11.13.0
+# Pin to the same pnpm as the API image and the root package.json packageManager
+# field — divergent pnpm versions can hoist/resolve deps differently.
+ARG PNPM_VERSION=11.15.1
 RUN npm install -g pnpm@${PNPM_VERSION}
 
 WORKDIR /app

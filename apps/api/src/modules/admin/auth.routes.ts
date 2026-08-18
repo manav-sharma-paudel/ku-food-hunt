@@ -28,22 +28,46 @@ export function toAdminUser(a: Admin): AdminUserDto {
 let dummyHashPromise: Promise<string> | null = null;
 const getDummyHash = () => (dummyHashPromise ??= hashPassword('timing-equalizer'));
 
+// Per-account brute-force throttle, layered on the per-IP loginLimiter so a
+// distributed (many-IP) guessing run against one email still gets locked out.
+const MAX_FAILED_ATTEMPTS = 8;
+const LOCKOUT_MS = 15 * 60 * 1000; // 15 minutes
+
 adminAuthRouter.post('/login', loginLimiter, async (req, res) => {
   const { email, password } = parseBody(adminLoginSchema, req);
   const admin = await prisma.admin.findUnique({ where: { email: email.toLowerCase() } });
+
+  if (admin?.lockedUntil && admin.lockedUntil.getTime() > Date.now()) {
+    throw new HttpError(
+      429,
+      'ACCOUNT_LOCKED',
+      'Too many failed attempts. Please wait a few minutes and try again.',
+    );
+  }
 
   let ok = false;
   if (admin) ok = await verifyPassword(password, admin.passwordHash);
   else await verifyPassword(password, await getDummyHash());
 
   if (!admin || !ok) {
+    if (admin) {
+      const attempts = admin.failedLoginCount + 1;
+      const locked = attempts >= MAX_FAILED_ATTEMPTS;
+      await prisma.admin.update({
+        where: { id: admin.id },
+        data: {
+          failedLoginCount: locked ? 0 : attempts,
+          lockedUntil: locked ? new Date(Date.now() + LOCKOUT_MS) : admin.lockedUntil,
+        },
+      });
+    }
     throw new HttpError(401, 'INVALID_CREDENTIALS', 'Invalid email or password.');
   }
 
   const { csrfToken } = await createSession(res, admin.id);
   const updated = await prisma.admin.update({
     where: { id: admin.id },
-    data: { lastLoginAt: new Date() },
+    data: { lastLoginAt: new Date(), failedLoginCount: 0, lockedUntil: null },
   });
   await writeAudit(admin.id, 'admin.login', 'admin', admin.id);
 

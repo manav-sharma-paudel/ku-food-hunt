@@ -238,26 +238,31 @@ model ReviewVote {
 // ————————————————————————————————— Admin & editorial
 
 model Admin {
-  id           String    @id @default(uuid())
-  email        String    @unique
-  passwordHash String
-  name         String
-  role         AdminRole @default(EDITOR)
-  lastLoginAt  DateTime?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  id               String    @id @default(uuid())
+  email            String    @unique
+  passwordHash     String
+  name             String
+  role             AdminRole @default(EDITOR)
+  lastLoginAt      DateTime?
+  // Per-account brute-force throttle: consecutive failures, and a lockout window
+  // that a distributed (multi-IP) guessing attack cannot slip past the per-IP limiter.
+  failedLoginCount Int       @default(0)
+  lockedUntil      DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 
   auditLogs AuditLog[]
   sessions  AdminSession[]
 }
 
 model AdminSession {
-  id        String   @id @default(uuid())
-  adminId   String
-  tokenHash String   @unique // sha256 of the opaque cookie token — the raw token is never stored
-  csrfToken String
-  expiresAt DateTime
-  createdAt DateTime @default(now())
+  id         String   @id @default(uuid())
+  adminId    String
+  tokenHash  String   @unique // sha256 of the opaque cookie token — the raw token is never stored
+  csrfToken  String
+  expiresAt  DateTime
+  lastUsedAt DateTime @default(now()) // drives the idle timeout (see lib/session.ts)
+  createdAt  DateTime @default(now())
 
   admin Admin @relation(fields: [adminId], references: [id], onDelete: Cascade)
 

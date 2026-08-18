@@ -60,7 +60,9 @@ export const restaurantCreateSchema = z.object({
   googlePlaceId: nullableText(200),
   latitude: z.number().min(-90).max(90),
   longitude: z.number().min(-180).max(180),
-  priceBand: z.enum(PRICE_BANDS),
+  // Optional: the admin panel sets the exact Rs. range and the coarse band is
+  // derived from it server-side (see derivePriceBand). Still accepted if sent.
+  priceBand: z.enum(PRICE_BANDS).optional(),
   priceMinNpr: optionalPrice,
   priceMaxNpr: optionalPrice,
   hasQrPayment: z.boolean().default(false),

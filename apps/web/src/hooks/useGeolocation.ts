@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 
 import type { Coordinates } from '@ku-food-hunt/shared';
 
@@ -34,5 +34,7 @@ export function useGeolocation(): GeolocationState {
     );
   }, []);
 
-  return { coords, status, request };
+  // Stable object identity: consumers put `geo` in effect deps, so returning a
+  // fresh object every render would re-run those effects on every render.
+  return useMemo(() => ({ coords, status, request }), [coords, status, request]);
 }

@@ -9,6 +9,7 @@ import { Prisma } from '@prisma/client';
 
 import { sha256Hex } from '../../lib/hash';
 import { prisma } from '../../lib/prisma';
+import { deleteStoredPhoto } from '../../lib/uploads';
 import { HttpError } from '../../middleware/error-handler';
 import { ensureUniqueSlug, resolveCategoryIds } from '../admin/admin-restaurants.service';
 import { sendSubmissionReceived } from './partner-emails';
@@ -99,6 +100,14 @@ export async function submitPartnerRestaurant(
       throw new HttpError(409, 'CONFLICT', 'This submission has already been processed.');
     }
 
+    // The `deleteMany` below drops the old image *rows*, but the files live on
+    // disk (served immutably from /uploads) and would otherwise leak forever.
+    // Capture the current URLs so we can delete any file the resubmission drops.
+    const priorImages = await prisma.restaurantImage.findMany({
+      where: { restaurantId: existing.id },
+      select: { url: true },
+    });
+
     const row = await prisma.restaurant.update({
       where: { id: existing.id },
       data: {
@@ -108,6 +117,11 @@ export async function submitPartnerRestaurant(
         images: { deleteMany: {}, ...images },
       },
     });
+
+    const keptUrls = new Set(imageRows(input).map((i) => i.url));
+    for (const { url } of priorImages) {
+      if (!keptUrls.has(url)) await deleteStoredPhoto(url);
+    }
     sendSubmissionReceived({
       to: input.submitterEmail,
       ownerName: input.submitterName,

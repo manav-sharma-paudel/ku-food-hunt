@@ -6,13 +6,18 @@ import { useEffect, useState } from 'react';
  */
 export function useScrollSpy(ids: string[], offset = 140): string {
   const [active, setActive] = useState(ids[0] ?? '');
+  // Depend on the id *values*, not the array reference: callers routinely pass a
+  // fresh `tabs.map(t => t.id)` every render, which would otherwise re-subscribe
+  // the scroll listener on every render. Element ids never contain a newline.
+  const idsKey = ids.join('\n');
 
   useEffect(() => {
-    if (ids.length === 0) return;
+    const list = idsKey ? idsKey.split('\n') : [];
+    if (list.length === 0) return;
 
     const onScroll = () => {
-      let current = ids[0] ?? '';
-      for (const id of ids) {
+      let current = list[0] ?? '';
+      for (const id of list) {
         const el = document.getElementById(id);
         if (el && el.getBoundingClientRect().top <= offset) current = id;
       }
@@ -22,7 +27,7 @@ export function useScrollSpy(ids: string[], offset = 140): string {
     onScroll();
     window.addEventListener('scroll', onScroll, { passive: true });
     return () => window.removeEventListener('scroll', onScroll);
-  }, [ids, offset]);
+  }, [idsKey, offset]);
 
   return active;
 }
