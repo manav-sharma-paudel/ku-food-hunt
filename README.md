@@ -34,6 +34,10 @@ pnpm --filter @ku-food-hunt/api db:seed
 pnpm dev        # web on :5173, api on :4000 (web proxies /api and /healthz to the api)
 ```
 
+> ⚠️ **`db:seed` is destructive and for local/dev use only.** It resets sample data and dev
+> credentials. Never run it against a database that holds real production data. See internal
+> ops documentation for details.
+
 Useful: `pnpm --filter @ku-food-hunt/api db:studio` opens Prisma Studio to browse/edit data.
 
 ## Docker
@@ -62,16 +66,12 @@ Worth knowing before changing any of it:
   `@ku-food-hunt/shared` workspace package, so pnpm needs the workspace manifest and lockfile.
 - **`VITE_*` variables are build args, not runtime env.** Vite inlines them into the bundle, so
   changing `SITE_URL` means `docker compose build web`, not a restart.
-- **Migrations are opt-in** (`docker compose run --rm migrate` runs `prisma migrate deploy`, which
-  is additive and safe to re-run). There is deliberately no seed service: `prisma/seed.ts` opens
-  with unconditional `deleteMany()` calls across `Restaurant`, `Category` and `SiteSetting`, and
-  rewrites the admin password to the dev default unless `ADMIN_SEED_PASSWORD` is set. Its only
-  guard is a `NODE_ENV === 'production'` check, which cannot fire in this container because the
-  seed never loads dotenv.
-- **The API port is not published.** Traffic reaches it only through nginx, which keeps it exactly
-  one proxy hop from the client — what the app's `trust proxy: 1` assumes. Publishing it creates a
-  second path where `req.ip` resolves to the Docker bridge gateway instead of the caller, and every
-  rate limit silently collapses into one shared bucket.
+- **Migrations are opt-in and additive** (`docker compose run --rm migrate` runs
+  `prisma migrate deploy`, safe to re-run). **There is deliberately no seed service in this
+  compose file** — seeding is a local-only workflow, not part of the deployed stack.
+- **The API port is intentionally not published.** Traffic reaches it only through nginx. Keep
+  it that way — exposing it directly changes how the app sees client IPs and undermines its
+  abuse-prevention safeguards. Details in internal ops docs, not here.
 - **Uploaded photos live on the `uploads` volume.** The API writes to `process.cwd()/uploads`, so
   the image's `WORKDIR` and that volume mount have to stay in step.
 
@@ -114,14 +114,20 @@ by each consumer (Vite / tsx / tsup) — no separate build-watch step needed.
 
 ### Admin console
 
-Sign in at [`/admin`](http://localhost:5173/admin). Dev credentials (seeded): **`admin@kufoodhunt.app`** / **`kufoodhunt-dev`** — override with `ADMIN_SEED_EMAIL` / `ADMIN_SEED_PASSWORD` before `db:seed`.
+Sign in at `/admin`. Credentials are configured via `ADMIN_SEED_EMAIL` / `ADMIN_SEED_PASSWORD`
+in your environment before running `db:seed` — set these to strong, unique values for any
+non-local environment. Do not rely on defaults.
 
 ### Partner onboarding
 
-Restaurant owners submit their place at [`/partners`](http://localhost:5173/partners) (no login).
-Submissions appear under **Admin → Restaurants → Pending**; approving publishes them, rejecting
-requires a reason that is emailed to the owner with an edit-and-resubmit link. In dev (no
-`RESEND_API_KEY`) those emails — including the edit link — are printed in the API console.
-New env vars (`RESEND_API_KEY`, `MAIL_FROM`, `PARTNERS_URL`) are documented in
-[apps/api/.env.example](apps/api/.env.example); subdomain DNS setup is in
-[docs/LAUNCH.md](docs/LAUNCH.md).
+Restaurant owners submit their place at `/partners` (no login required). Submissions appear
+under **Admin → Restaurants → Pending**; approving publishes them, rejecting requires a reason
+that is emailed to the owner with an edit-and-resubmit link. In local dev (no
+`RESEND_API_KEY` set), those emails — including the edit link — are printed to the API console
+instead of sent. New env vars (`RESEND_API_KEY`, `MAIL_FROM`, `PARTNERS_URL`) are documented in
+`apps/api/.env.example`; subdomain DNS setup is in `docs/LAUNCH.md`.
+
+## Security
+
+If you believe you've found a security issue, please report it privately rather than opening a
+public GitHub issue. (Add your preferred contact method or a `SECURITY.md` link here.)
