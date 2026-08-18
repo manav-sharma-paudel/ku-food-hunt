@@ -5,7 +5,7 @@
  * NOTE: names, menus, prices, and coordinates are realistic placeholders —
  * they are replaced by on-the-ground data collection before launch (blueprint §1).
  */
-import { PrismaClient, type ImageType, type PriceBand } from '@prisma/client';
+import { PrismaClient, type AdminRole, type ImageType, type PriceBand } from '@prisma/client';
 
 import { hashPassword } from '../src/lib/password';
 
@@ -984,33 +984,62 @@ async function main() {
     await prisma.siteSetting.create({ data: s });
   }
 
-  console.log('Ensuring admin account…');
-  // No default email and no fallback password: a publicly-known credential must
-  // never be created. Provisioning an admin is an explicit, opt-in action —
-  // supply BOTH ADMIN_SEED_EMAIL and ADMIN_SEED_PASSWORD, or no admin is created.
-  // Existing accounts are only created-if-missing, never password-reset here, so
-  // the accounts provisioned out-of-band keep their own passwords.
-  const adminEmail = process.env.ADMIN_SEED_EMAIL;
-  const adminPassword = process.env.ADMIN_SEED_PASSWORD;
+  console.log('Ensuring admin accounts…');
+  // The roster of admin accounts. Emails and roles are not secrets and can live
+  // in the repo, but every password is read from its own env var so a real
+  // credential is never committed — hardcoding one here would put the public
+  // repo one clone away from full admin takeover. Each account is created only
+  // if missing and is never password-reset by the seed, so accounts provisioned
+  // out-of-band keep whatever password they already have. Set the matching env
+  // var for each account you want provisioned; others are skipped.
+  const ADMIN_ROSTER: {
+    email: string;
+    name: string;
+    role: AdminRole;
+    passwordEnv: string;
+  }[] = [
+    {
+      email: 'admin1@kufoodhunt.com',
+      name: 'Admin One',
+      role: 'SUPERADMIN',
+      passwordEnv: 'ADMIN1_PASSWORD',
+    },
+    {
+      email: 'admin2@kufoodhunt.com',
+      name: 'Admin Two',
+      role: 'SUPERADMIN',
+      passwordEnv: 'ADMIN2_PASSWORD',
+    },
+    {
+      email: 'moderator1@kufoodhunt.com',
+      name: 'Moderator One',
+      role: 'EDITOR',
+      passwordEnv: 'MODERATOR1_PASSWORD',
+    },
+    {
+      email: 'moderator2@kufoodhunt.com',
+      name: 'Moderator Two',
+      role: 'EDITOR',
+      passwordEnv: 'MODERATOR2_PASSWORD',
+    },
+  ];
 
-  if (!adminEmail || !adminPassword) {
-    console.log(
-      '  skipped — set ADMIN_SEED_EMAIL and ADMIN_SEED_PASSWORD to provision an admin. ' +
-        'No default/public admin account is ever created.',
-    );
-  } else {
-    const passwordHash = await hashPassword(adminPassword);
-    await prisma.admin.upsert({
-      where: { email: adminEmail },
-      update: {}, // never silently reset an existing account's password
-      create: {
-        email: adminEmail.toLowerCase(),
-        name: 'KU Food Hunt Admin',
-        role: 'SUPERADMIN',
-        passwordHash,
-      },
+  for (const member of ADMIN_ROSTER) {
+    const password = process.env[member.passwordEnv];
+    if (!password) {
+      console.log(`  ${member.email} — skipped (set ${member.passwordEnv} to provision)`);
+      continue;
+    }
+    const existing = await prisma.admin.findUnique({ where: { email: member.email } });
+    if (existing) {
+      console.log(`  ${member.email} — already exists, left unchanged`);
+      continue;
+    }
+    const passwordHash = await hashPassword(password);
+    await prisma.admin.create({
+      data: { email: member.email, name: member.name, role: member.role, passwordHash },
     });
-    console.log(`  admin ensured → ${adminEmail.toLowerCase()}`);
+    console.log(`  ${member.email} (${member.role}) — created`);
   }
 
   const counts = {
