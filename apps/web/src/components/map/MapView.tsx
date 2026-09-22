@@ -1,5 +1,5 @@
 import type { Coordinates, MapRestaurantDto } from '@ku-food-hunt/shared';
-import maplibregl from 'maplibre-gl';
+import { LngLatBounds } from 'maplibre-gl';
 import { useEffect, useRef } from 'react';
 import Map, { Marker, NavigationControl, type MapRef } from 'react-map-gl/maplibre';
 
@@ -31,7 +31,7 @@ export function MapView({
   function fitToMarkers() {
     const map = mapRef.current;
     if (!map || restaurants.length === 0) return;
-    const bounds = new maplibregl.LngLatBounds();
+    const bounds = new LngLatBounds();
     for (const r of restaurants) bounds.extend([r.longitude, r.latitude]);
     if (userCoords) bounds.extend([userCoords.longitude, userCoords.latitude]);
     map.fitBounds(bounds, { padding: 90, maxZoom: 16, duration: 0 });
