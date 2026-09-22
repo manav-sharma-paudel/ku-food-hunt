@@ -10,6 +10,7 @@
   "scripts": {
     "dev": "pnpm -r --parallel --filter './apps/*' dev",
     "build": "pnpm -r build",
+    "vercel-build": "pnpm --filter @ku-food-hunt/api db:generate && pnpm build",
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",
     "lint": "eslint .",
