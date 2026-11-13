@@ -22,5 +22,4 @@ apps/api/uploads/
 
 # Local-only operational scripts (e.g. admin provisioning) — kept off the repo
 apps/api/scripts/
-.vercel
 .env*
